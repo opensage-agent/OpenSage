@@ -14,8 +14,8 @@ exclude_docs: |
   RL-Integration.md
 
 # Repository information
-repo_url: https://github.com/OpenSage-ADK/OpenSage
-repo_name: OpenSage-ADK/OpenSage
+repo_url: https://github.com/opensage-agent/OpenSage
+repo_name: opensage-agent/OpenSage
 
 # Theme
 theme:
@@ -135,4 +135,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/OpenSage-ADK/OpenSage
+      link: https://github.com/opensage-agent/OpenSage

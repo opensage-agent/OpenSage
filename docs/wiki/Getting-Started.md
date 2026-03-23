@@ -19,7 +19,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 # Clone the repository
-git clone https://github.com/OpenSage-ADK/OpenSage.git
+git clone https://github.com/opensage-agent/OpenSage.git
 cd OpenSage
 
 # Create virtual environment
