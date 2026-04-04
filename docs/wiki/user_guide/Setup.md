@@ -1,4 +1,4 @@
-# Getting Started
+# Setup
 
 ## Prerequisites
 
@@ -62,7 +62,8 @@ uv run opensage dependency-check
 OpenSage agents can use Python tools, filesystem-discovered Skills, and MCP
 toolsets.
 
-[Adding a New Tool](Adding-Tools.md): How to add new tools/skills/toolsets.
+[Adding a New Tool](../developer_guide/Adding-Tools.md): How to add new
+tools/skills/toolsets.
 
 ## Creating Your Own Agent
 
@@ -367,5 +368,7 @@ MCP service endpoints are configured in TOML (host/port). See
 
 ## Next Steps
 
-[Project Structure](Project-Structure.md) - Understand the codebase structure
-[Development Guides](Development-Guides.md) - Start developing
+- [Project Structure](../developer_guide/Project-Structure.md) - Understand the
+  codebase structure
+- [CLI Reference](../cli/index.md) - Explore the CLI entry points and commands
+- [Evaluations](../evaluation/index.md) - Learn how evaluation runs are started

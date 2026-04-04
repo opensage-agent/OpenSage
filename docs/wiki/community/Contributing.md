@@ -24,8 +24,3 @@ refactor(component): Description
 3. Run tests and linting
 4. Update documentation
 5. Submit PR with description
-
-## See Also
-
-[Best Practices](Best-Practices.md) - Development best practices
-[Development Guides](Development-Guides.md) - How to extend the framework

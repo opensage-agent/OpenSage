@@ -212,6 +212,6 @@ src/opensage/plugins/
 
 ## See Also
 
-- [Configuration](Configuration.md#plugins-configuration) — Plugin configuration reference
+- [Configuration](../user_guide/Configuration.md#plugins-configuration) — Plugin
+  configuration reference
 - [Adding Tools](Adding-Tools.md) — How to create tools (distinct from plugins)
-- [Core Components](Core-Components.md) — System architecture overview

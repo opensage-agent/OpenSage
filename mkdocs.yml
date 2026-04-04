@@ -90,46 +90,36 @@ nav:
   - Home: index.md
   - User Guide:
     - Getting Started:
-      - Introduction: Introduction.md
-      - Getting Started: Getting-Started.md
-      - Project Structure: Project-Structure.md
-    - Entry Points:
-      - Overview: Entry-Points.md
-      - OpenSage Web Entry: OpenSage-Web-Entry.md
-      - Evaluation Entry: Evaluation-Entry.md
-    - Practices:
-      - Best Practices: Best-Practices.md
-      - Testing & Debugging: Testing-Debugging.md
-    - Configuration: Configuration.md
+      - Introduction: user_guide/Introduction.md
+      - Setup: user_guide/Setup.md
+      - Configuration: user_guide/Configuration.md
   - Developer Guide:
-    - Core:
-      - Development Guides: Development-Guides.md
-      - Core Components: Core-Components.md
-    - Entry points:
-      - Entry-point walkthroughs:
-        - opensage web: OpenSage-Web-Workflow.md
-        - evaluations: Evaluation-Workflow.md
-    - Extending:
-      - Adding Tools: Adding-Tools.md
-      - Plugins: Plugins.md
-      - Adding a Evaluation Benchmark: Adding-Evaluations.md
-      - Sandboxes:
-        - Sandbox System Guide: Sandboxes.md
-        - Adding a sandbox: Adding-a-Sandbox.md
-        - Adding a new sandbox backend: Adding-a-New-Sandbox-Backend.md
-      - RL Integration:
-        - AReaL Training: rl_integration/AReaL-Training.md
-        - Slime Training: rl_integration/slime-Training.md
-  - Benchmarking:
-    - Overview: Benchmarking.md
+    - Project Structure: developer_guide/Project-Structure.md
+    - Tools:
+      - Adding Tools: developer_guide/Adding-Tools.md
+    - Plugins:
+      - Plugins: developer_guide/Plugins.md
+    - Sandboxes:
+      - Sandbox System Guide: developer_guide/Sandboxes.md
+      - Adding a Sandbox: developer_guide/Adding-a-Sandbox.md
+      - Adding a New Sandbox Backend: developer_guide/Adding-a-New-Sandbox-Backend.md
+  - Evaluation:
+    - Overview: evaluation/index.md
+    - Workflow Details: evaluation/workflow.md
+    - Adding a Benchmark: evaluation/adding-evaluations.md
   - CLI Reference:
-    - Overview: CLI-Reference.md
-    - opensage: generated/cli/opensage.md
-    - opensage web: generated/cli/opensage-web.md
-    - opensage dependency-check: generated/cli/opensage-dependency-check.md
+    - Overview: cli/index.md
+    - OpenSage:
+      - Flag Reference: generated/cli/opensage.md
+    - OpenSage Web:
+      - Guide: cli/opensage-web.md
+      - Flag Reference: generated/cli/opensage-web.md
+    - OpenSage Dependency Check:
+      - Guide: cli/dependency-check.md
+      - Flag Reference: generated/cli/opensage-dependency-check.md
   - Community:
-    - Overview: Community.md
-    - Contributing: Contributing.md
+    - Support and Feedback: community/Support-and-Feedback.md
+    - Contributing: community/Contributing.md
 
 # Extra
 extra:

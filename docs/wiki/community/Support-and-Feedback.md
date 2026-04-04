@@ -1,13 +1,4 @@
-# Community
-
-This section covers how the project is developed and how contributors can get
-involved.
-
-## Contributing
-
-- See [Contributing](Contributing.md)
-
-## Support and feedback
+# Support and feedback
 
 - **GitHub issues**: Please open an issue in `opensage-agent/OpenSage` with steps to
   reproduce, expected behavior, and logs if applicable.

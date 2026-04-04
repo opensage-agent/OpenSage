@@ -27,37 +27,3 @@ OpenSage/
 ├── tests/                   # Unit/integration tests
 └── third_party/             # External benchmark/tool dependencies
 ```
-
-## Key Directories Explained
-
-### `src/opensage/agents/`
-- OpenSage base agent and tool description loading (`ToolLoader`)
-
-### `src/opensage/session/`
-- Session manager and per-session resource isolation
-- Sandbox lifecycle management
-- Dynamic agent management and ensemble management
-
-### `src/opensage/sandbox/`
-- Abstract sandbox interface
-- Docker-based sandbox
-- Kubernetes-based sandbox (under development)
-- `initializers/`: Sandbox initialization logic
-
-### `src/opensage/bash_tools/`
-- Filesystem-discovered Skills (bash tools)
-- Each Skill: `SKILL.md` + `scripts/` (+ optional `deps/`)
-
-### `src/opensage/toolbox/`
-- Python-side tools, MCP toolsets, and wrappers used by agents
-
-### `src/opensage/evaluations/`
-- `cybergym/`: CyberGym benchmark
-- `patchagent/`: PatchAgent benchmark
-- `secodeplt/`: SecCodePLT benchmark
-- `swe_bench_pro/` SWE-Bench Pro benchmark
-
-## See Also
-
-[Core Components](Core-Components.md) - Component details
-[Development Guides](Development-Guides.md) - How to add to the codebase
