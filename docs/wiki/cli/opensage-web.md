@@ -139,8 +139,9 @@ derived from the agent directory's parent folder.
 
 ```python
 app = web_server.get_fast_api_app(allow_origins=None, enable_dev_ui=True)
-config = uvicorn.Config(app, host=host, port=port, reload=reload, log_level=log_level.lower())
+config = uvicorn.Config(app, host=host, port=port, log_level=log_level.lower())
 server = uvicorn.Server(config)
+server.capture_signals = lambda: contextlib.nullcontext()
 server.run()
 ```
 
