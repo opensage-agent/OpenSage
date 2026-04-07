@@ -12,10 +12,17 @@ import json
 import logging
 import os
 import re
+import shlex
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
-from opensage.config.config_dataclass import OpenSageConfig
+from opensage.config.config_dataclass import (
+    ContainerConfig,
+    MCPConfig,
+    MCPServiceConfig,
+    OpenSageConfig,
+    SandboxConfig,
+)
 from opensage.sandbox.base_sandbox import BaseSandbox, SandboxState
 from opensage.sandbox.factory import (
     create_sandbox_class,
@@ -113,6 +120,234 @@ class OpenSageSandboxManager:
                 f"Error removing sandbox {sandbox_type} from session {self.opensage_session_id}: {e}"
             )
             return False
+
+    @staticmethod
+    def _bind_ports_to_ip(container_config, loopback_ip: str, label: str = "") -> None:
+        """Normalize port bindings to use the given loopback IP.
+
+        Mutates ``container_config.ports`` in-place, converting each binding to
+        ``{"host": loopback_ip, "port": <port>}`` format.
+        """
+        if not container_config.ports:
+            return
+        updated = {}
+        for container_port, host_binding in container_config.ports.items():
+            if host_binding is None:
+                updated[container_port] = host_binding
+            elif isinstance(host_binding, int):
+                updated[container_port] = {"host": loopback_ip, "port": host_binding}
+            elif isinstance(host_binding, dict):
+                if "port" not in host_binding:
+                    raise ValueError(
+                        f"Invalid port binding for {label}:{container_port}: "
+                        "dict must contain 'port'"
+                    )
+                updated[container_port] = {
+                    "host": loopback_ip,
+                    "port": int(host_binding["port"]),
+                }
+            else:
+                raise ValueError(
+                    f"Invalid port binding for {label}:{container_port}: "
+                    f"{type(host_binding).__name__}. "
+                    "Expected int, None, or dict with 'port'."
+                )
+        container_config.ports = updated
+
+    async def launch_sandbox(
+        self, sandbox_type: str, container_config
+    ) -> BaseSandbox:
+        """Launch a single sandbox at runtime (after initial batch launch).
+
+        Creates, starts, and initializes one container. Registers it in the
+        manager's sandbox dict so it participates in normal lifecycle
+        (cleanup, shutdown, etc.).
+
+        This is the incremental counterpart to ``launch_all_sandboxes()``.
+        It reuses the loopback IP already allocated during the batch launch
+        (stored in ``config.default_host``).
+
+        Args:
+            sandbox_type: Unique name for this sandbox (e.g. ``mcp_my_tool``).
+            container_config: A ``ContainerConfig`` describing the container.
+
+        Returns:
+            The initialized ``BaseSandbox`` instance.
+
+        Raises:
+            ValueError: If a sandbox with this type already exists.
+            RuntimeError: If no loopback IP has been allocated yet.
+            Exception: On container creation or initialization failure.
+        """
+        if sandbox_type in self._sandboxes:
+            raise ValueError(f"Sandbox '{sandbox_type}' already exists")
+
+        config = self.config
+        loopback_ip = config.default_host or "127.0.0.1"
+
+        # Bind port mappings to the existing loopback IP.
+        self._bind_ports_to_ip(container_config, loopback_ip, sandbox_type)
+
+        # Register in sandbox config so the rest of the system can see it.
+        if not config.sandbox:
+            config.sandbox = SandboxConfig()
+        config.sandbox.add_or_update_sandbox(sandbox_type, container_config)
+
+        backend_type = getattr(config.sandbox, "backend", "native")
+        backend_class = get_backend_class(backend_type, config)
+
+        # Create the container.
+        _type, sandbox_instance = await backend_class.create_single_sandbox(
+            self.opensage_session_id, sandbox_type, container_config
+        )
+        sandbox_instance._using_cached = False
+
+        self._sandboxes[sandbox_type] = sandbox_instance
+
+        # Initialize (runs readiness checks including MCP SSE polling).
+        try:
+            result_map = await backend_class.initialize_all_sandboxes(
+                {sandbox_type: sandbox_instance},
+                continue_on_error=False,
+            )
+            error = result_map.get(sandbox_type)
+            if error is not None:
+                raise error
+        except Exception:
+            # Roll back on failure.
+            self.remove_sandbox(sandbox_type)
+            raise
+
+        logger.info(
+            "Dynamically launched sandbox '%s' for session %s",
+            sandbox_type,
+            self.opensage_session_id,
+        )
+        return sandbox_instance
+
+    def add_sse_mcp_server(
+        self, *, name: str, sse_port: int, sse_host: str
+    ) -> Dict:
+        """Register an already-running SSE MCP server.
+
+        Args:
+            name: Unique MCP service name.
+            sse_port: Port the SSE MCP server is listening on.
+            sse_host: Host address.
+
+        Returns:
+            dict with host, port, and status.
+        """
+        if not self.config.mcp:
+            self.config.mcp = MCPConfig()
+            self.config.mcp.set_parent_config(self.config)
+        svc = MCPServiceConfig(sse_port=sse_port, sse_host=sse_host)
+        self.config.mcp.add_service(name, svc)
+
+        logger.info(
+            "Registered SSE MCP server '%s' at %s:%d for session %s",
+            name, svc.sse_host, sse_port, self.opensage_session_id,
+        )
+        return {"name": name, "sse_host": svc.sse_host, "sse_port": sse_port, "status": "registered"}
+
+    async def add_stdio_mcp_server(
+        self,
+        *,
+        name: str,
+        command: str,
+        args: Optional[list] = None,
+        env: Optional[Dict] = None,
+    ) -> Dict:
+        """Add a stdio MCP server at runtime.
+
+        Wraps the command in a Docker container running ``mcp-proxy``
+        (stdio→SSE bridge), launches it, and registers the resulting SSE
+        endpoint as an ``MCPServiceConfig``.
+
+        The container image includes Node.js and Python/uv so that
+        common MCP server install patterns (``npx -y @pkg``, ``uvx pkg``)
+        work out of the box.
+
+        Args:
+            name: Unique MCP service name.
+            command: Executable path for the stdio MCP server.
+            args: Command arguments.
+            env: Environment variables.
+
+        Returns:
+            dict with sandbox type, allocated SSE port, and status.
+        """
+        from opensage.sandbox.native_docker_sandbox import NativeDockerSandbox
+
+        config = self.config
+        loopback_ip = config.default_host or "127.0.0.1"
+        sse_port = NativeDockerSandbox._allocate_dynamic_port(loopback_ip)
+
+        if not config.mcp:
+            config.mcp = MCPConfig()
+            config.mcp.set_parent_config(config)
+        svc = MCPServiceConfig(sse_port=sse_port)
+        config.mcp.add_service(name, svc)
+
+        proxy_args = ["--port", "8080", "--host", "0.0.0.0", "--", command] + (args or [])
+        proxy_cmd = shlex.join(proxy_args)
+
+        sandbox_type = f"mcp_{name}"
+        container_cfg = ContainerConfig(
+            image="opensage-mcp-proxy:latest",
+            project_relative_dockerfile_path="src/opensage/templates/dockerfiles/mcp_stdio_proxy/Dockerfile",
+            command=proxy_cmd,
+            environment=env or {},
+            ports={"8080/tcp": sse_port},
+            mcp_services=[name],
+        )
+
+        try:
+            await self.launch_sandbox(sandbox_type, container_cfg)
+        except Exception:
+            config.mcp.services.pop(name, None)
+            raise
+
+        logger.info(
+            "Launched stdio MCP server '%s' (sandbox=%s, port=%d) for session %s",
+            name, sandbox_type, sse_port, self.opensage_session_id,
+        )
+        return {
+            "name": name,
+            "sandbox_type": sandbox_type,
+            "sse_port": sse_port,
+            "status": "running",
+        }
+
+    def remove_mcp_server(self, name: str) -> Dict:
+        """Remove an MCP server registered at runtime.
+
+        For stdio servers (which have an associated sandbox named ``mcp_{name}``),
+        the container is stopped and removed. The MCP service config entry is
+        removed in all cases.
+
+        Args:
+            name: The MCP service name.
+
+        Returns:
+            dict with name and status.
+
+        Raises:
+            KeyError: If no service with this name exists.
+        """
+        if not self.config.mcp or name not in self.config.mcp.services:
+            raise KeyError(f"MCP service '{name}' not found")
+
+        sandbox_type = f"mcp_{name}"
+        had_sandbox = self.remove_sandbox(sandbox_type)
+
+        self.config.mcp.services.pop(name, None)
+
+        logger.info(
+            "Removed MCP server '%s' (sandbox_removed=%s) for session %s",
+            name, had_sandbox, self.opensage_session_id,
+        )
+        return {"name": name, "sandbox_removed": had_sandbox, "status": "removed"}
 
     def get_session_statistics(self) -> Dict:
         """Get statistics for this session's sandboxes.
