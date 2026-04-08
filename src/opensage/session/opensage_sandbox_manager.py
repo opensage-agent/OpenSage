@@ -30,6 +30,7 @@ from opensage.sandbox.factory import (
     get_initializer_class,
 )
 from opensage.sandbox.utils import can_pull_image, image_exists_locally
+from opensage.utils.agent_utils import get_mcp_url_from_session_id
 from opensage.utils.project_info import PROJECT_PATH
 
 logger = logging.getLogger(__name__)
@@ -348,6 +349,25 @@ class OpenSageSandboxManager:
             name, had_sandbox, self.opensage_session_id,
         )
         return {"name": name, "sandbox_removed": had_sandbox, "status": "removed"}
+
+    def get_runtime_mcp_toolset(self, name: str):
+        """Create an OpenSageMCPToolset for a registered MCP service.
+
+        Returns None if no service with this name exists.
+        """
+        if not self.config.mcp or name not in self.config.mcp.services:
+            return None
+
+        from google.adk.tools.mcp_tool.mcp_toolset import SseConnectionParams
+
+        from opensage.agents.opensage_agent import OpenSageMCPToolset
+
+        url = get_mcp_url_from_session_id(name, self.opensage_session_id)
+        return OpenSageMCPToolset(
+            name=name,
+            connection_params=SseConnectionParams(url=url),
+            tool_name_prefix=name,
+        )
 
     def get_session_statistics(self) -> Dict:
         """Get statistics for this session's sandboxes.

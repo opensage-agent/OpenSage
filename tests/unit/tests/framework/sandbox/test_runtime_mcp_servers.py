@@ -287,3 +287,25 @@ class TestRemoveMcpServer:
 
         with pytest.raises(KeyError, match="not found"):
             mgr.remove_mcp_server("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# get_runtime_mcp_toolset
+# ---------------------------------------------------------------------------
+
+class TestGetRuntimeMcpToolset:
+    def test_returns_none_when_not_configured(self):
+        mgr = _make_manager()
+        assert mgr.get_runtime_mcp_toolset("nonexistent") is None
+
+    def test_returns_toolset_when_service_exists(self):
+        mgr = _make_manager(
+            mcp=MCPConfig(services={"my_mcp": MCPServiceConfig(sse_port=9050, sse_host="127.0.0.2")}),
+        )
+        with patch(
+            "opensage.session.opensage_sandbox_manager.get_mcp_url_from_session_id",
+            return_value="http://127.0.0.2:9050/sse",
+        ):
+            toolset = mgr.get_runtime_mcp_toolset("my_mcp")
+        assert toolset is not None
+        assert toolset.name == "my_mcp"

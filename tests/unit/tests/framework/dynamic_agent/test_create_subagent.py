@@ -47,10 +47,21 @@ class _CapturingAgentManager:
         return True
 
 
+class _DummySandboxManager:
+    """Minimal sandbox manager stub for runtime MCP toolset tests."""
+
+    def __init__(self, mcp_toolsets: dict | None = None):
+        self._mcp_toolsets = mcp_toolsets or {}
+
+    def get_runtime_mcp_toolset(self, name: str):
+        return self._mcp_toolsets.get(name)
+
+
 class _DummySession:
-    def __init__(self, models: list[str]):
+    def __init__(self, models: list[str], mcp_toolsets: dict | None = None):
         self.agents = _CapturingAgentManager()
         self.ensemble = _DummyEnsemble(models=models)
+        self.sandboxes = _DummySandboxManager(mcp_toolsets=mcp_toolsets)
 
 
 @pytest.mark.asyncio
@@ -149,3 +160,74 @@ async def test_create_subagent_inherit_model_passes_resolved_model(monkeypatch):
     cfg = session.agents.last_config
     assert cfg["model"] == "inherit"
     assert cfg["_resolved_model"] == "MODEL_OBJ"
+
+
+# ---------------------------------------------------------------------------
+# Runtime MCP toolset fallback in create_subagent
+# ---------------------------------------------------------------------------
+
+
+class _FakeMCPToolset:
+    """Minimal stand-in for OpenSageMCPToolset."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.tool_name_prefix = name
+
+
+@pytest.mark.asyncio
+async def test_create_subagent_resolves_runtime_mcp_tool(monkeypatch):
+    """Tool name not in caller's tools but in config.mcp.services resolves."""
+    tool_context = _DummyToolContext()
+    fake_toolset = _FakeMCPToolset("my_runtime_mcp")
+    session = _DummySession(
+        models=["openai/gpt-5"],
+        mcp_toolsets={"my_runtime_mcp": fake_toolset},
+    )
+
+    monkeypatch.setattr(dyn, "get_opensage_session_id_from_context", lambda tc: "sid")
+    monkeypatch.setattr(dyn, "get_opensage_session", lambda sid: session)
+    # Caller agent has a dummy tool (needed to pass the empty-tools guard)
+    # but NOT the runtime MCP tool.
+    dummy = lambda: None
+    dummy.__name__ = "some_other_tool"
+    monkeypatch.setattr(dyn, "extract_tools_from_agent", lambda agent: {"some_other_tool": dummy})
+
+    res = await dyn.create_subagent(
+        agent_name="mcp_user",
+        instruction="use the tool",
+        model_name="openai/gpt-5",
+        tools_list=["my_runtime_mcp"],
+        enabled_skills=[],
+        tool_context=tool_context,
+    )
+
+    assert res["success"] is True
+    cfg = session.agents.last_config
+    assert fake_toolset in cfg["tools"]
+    assert "my_runtime_mcp" in cfg["tool_names"]
+
+
+@pytest.mark.asyncio
+async def test_create_subagent_runtime_mcp_still_rejects_unknown(monkeypatch):
+    """Tool name not in caller's tools AND not in MCP services is still invalid."""
+    tool_context = _DummyToolContext()
+    session = _DummySession(models=["openai/gpt-5"])  # no mcp_toolsets
+
+    monkeypatch.setattr(dyn, "get_opensage_session_id_from_context", lambda tc: "sid")
+    monkeypatch.setattr(dyn, "get_opensage_session", lambda sid: session)
+    dummy = lambda: None
+    dummy.__name__ = "some_tool"
+    monkeypatch.setattr(dyn, "extract_tools_from_agent", lambda agent: {"some_tool": dummy})
+
+    res = await dyn.create_subagent(
+        agent_name="a",
+        instruction="do stuff",
+        model_name="openai/gpt-5",
+        tools_list=["nonexistent_tool"],
+        enabled_skills=[],
+        tool_context=tool_context,
+    )
+
+    assert res["success"] is False
+    assert "nonexistent_tool" in res["error"]
