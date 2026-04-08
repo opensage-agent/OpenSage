@@ -5,6 +5,8 @@ import pytest
 
 from opensage.utils.project_info import PROJECT_PATH
 
+pytestmark = pytest.mark.slow
+
 logger = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)

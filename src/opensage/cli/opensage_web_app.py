@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, List, Literal, Optional
@@ -258,6 +259,74 @@ class OpenSageWebServer:
             active.cancel("Stopped from Dev UI")
             logger.warning("Requested stop for active turn: session_id=%s", sid)
             return {"stopped": True, "running": True, "session_id": sid}
+
+        @app.post("/mcp/servers")
+        async def add_mcp_server(req: Request) -> dict[str, Any]:
+            """Add an MCP server at runtime.
+
+            Provide ``command`` for a stdio server (containerized via
+            mcp-proxy) or ``sse_port`` for an already-running SSE server.
+            """
+            from opensage.session import get_opensage_session
+
+            body = await req.json()
+            name = body.get("name")
+            command = body.get("command")
+            sse_port = body.get("sse_port")
+            sse_host = body.get("sse_host")
+
+            if not name:
+                raise HTTPException(status_code=400, detail="name is required")
+            if not re.match(r"^[a-zA-Z0-9_-]+$", name):
+                raise HTTPException(status_code=400, detail="name must be alphanumeric (with _ or -)")
+            if not command and not sse_port:
+                raise HTTPException(status_code=400, detail="command or sse_port is required")
+            if command and sse_port:
+                raise HTTPException(status_code=400, detail="provide command or sse_port, not both")
+            if sse_port and not sse_host:
+                raise HTTPException(status_code=400, detail="sse_host is required with sse_port")
+
+            opensage_session = get_opensage_session(self.fixed_session_id)
+
+            if opensage_session.config.mcp and name in opensage_session.config.mcp.services:
+                raise HTTPException(status_code=409, detail=f"MCP service '{name}' already exists")
+
+            try:
+                if sse_port:
+                    result = opensage_session.sandboxes.add_sse_mcp_server(
+                        name=name,
+                        sse_port=int(sse_port),
+                        sse_host=sse_host,
+                    )
+                else:
+                    result = await opensage_session.sandboxes.add_stdio_mcp_server(
+                        name=name,
+                        command=command,
+                        args=body.get("args", []),
+                        env=body.get("env", {}),
+                    )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+            return result
+
+        @app.delete("/mcp/servers/{name}")
+        async def remove_mcp_server(name: str) -> dict[str, Any]:
+            """Remove an MCP server by name."""
+            from opensage.session import get_opensage_session
+
+            opensage_session = get_opensage_session(self.fixed_session_id)
+
+            try:
+                result = opensage_session.sandboxes.remove_mcp_server(name)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+            return result
 
         @app.get("/debug/trace/session/{session_id}")
         async def get_session_trace(session_id: str) -> Any:

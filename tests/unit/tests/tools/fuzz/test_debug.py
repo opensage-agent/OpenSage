@@ -3,6 +3,8 @@ import pytest
 
 from opensage.utils.project_info import SRC_PATH
 
+pytestmark = pytest.mark.slow
+
 from ....utils import copy_to_container, extract_infos_from_arvo_script
 
 EXAMPLE_IMAGE = "n132/arvo:51603-vul"  # https://github.com/file/file.git

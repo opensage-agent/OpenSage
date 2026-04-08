@@ -188,6 +188,17 @@ async def create_subagent(
                     requested_tool_names_for_metadata.append(matched_toolset_name)
                 continue
 
+            # Fallback: check runtime MCP services registered via POST /mcp/servers.
+            toolset = session.sandboxes.get_runtime_mcp_toolset(requested)
+            if toolset is not None:
+                tid = id(toolset)
+                if tid not in added_tool_ids:
+                    tools_to_add.append(toolset)
+                    added_tool_ids.add(tid)
+                injected_toolset_names.add(requested)
+                requested_tool_names_for_metadata.append(requested)
+                continue
+
             invalid_tools.append(requested)
 
         if invalid_tools:

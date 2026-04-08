@@ -1326,6 +1326,32 @@ class NativeDockerSandbox(BaseSandbox):
             logger.info(f"Successfully initialized {len(sandbox_instances)} sandboxes")
             return {sandbox_type: None for sandbox_type, _ in init_entries}
 
+    @staticmethod
+    def _check_port_available(ip: str, port: int) -> bool:
+        """Check if a port is available on the given IP address."""
+        import socket
+
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((ip, port))
+                return True
+        except OSError:
+            return False
+
+    @classmethod
+    def _allocate_dynamic_port(cls, ip: str, range_start: int = 9000, range_end: int = 9999) -> int:
+        """Find an available port on the given IP within the specified range.
+
+        Raises:
+            RuntimeError: If no port is available in the range.
+        """
+        for port in range(range_start, range_end + 1):
+            if cls._check_port_available(ip, port):
+                return port
+        raise RuntimeError(
+            f"No available port found on {ip} in range {range_start}-{range_end}"
+        )
+
     @classmethod
     def _find_available_loopback_ip(cls, config) -> str:
         """Find an available IP address in 127.0.0.0/24 range (127.0.0.2-127.0.0.254).
